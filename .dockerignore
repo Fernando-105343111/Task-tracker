@@ -1,0 +1,14 @@
+.git
+.env
+.env.*
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.coverage*
+reports
+evidence-local
+htmlcov
+docs
+*.zip
