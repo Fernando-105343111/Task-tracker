@@ -27,8 +27,13 @@ def close_db(_error=None):
 
 
 def init_db():
-    schema = Path(__file__).with_name("schema.sql").read_text(encoding="utf-8")
-    get_db().execute(schema)
+    app_dir = Path(__file__).parent
+    # Both initialisation and the additive upgrade commit together. Re-running
+    # startup must neither remove tasks nor reset their priority/due date.
+    with get_db().transaction():
+        get_db().execute((app_dir / "schema.sql").read_text(encoding="utf-8"))
+        for migration in sorted((app_dir / "migrations").glob("*.sql")):
+            get_db().execute(migration.read_text(encoding="utf-8"))
 
 
 @click.command("init-db")

@@ -26,6 +26,8 @@ def test_full_task_lifecycle(client):
         "title": "Demo task",
         "description": "Verify database",
         "status": "To Do",
+        "priority": "Medium",
+        "dueDate": None,
     }
     url = created.headers["Location"]
     assert client.get(url).json == task

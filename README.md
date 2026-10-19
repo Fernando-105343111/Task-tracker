@@ -31,9 +31,11 @@ It preserves an existing `.env`. The file is excluded from Git and the image.
 Do not print or commit it. PostgreSQL has no published host port.
 The application binds to localhost:8080 by default. The application image runs
 Gunicorn as a non-root user. Compose waits for the database health check before
-starting the application. Startup creates the initial schema without removing
-existing task records. `init-db` is not a database migration system; future schema
-changes will require a separate migration plan.
+starting the application. Startup creates the initial schema and applies the
+rerunnable additive SQL migration in `app/migrations/` without removing existing
+records. Existing tasks receive priority `Medium` and no due date. Re-running
+startup retains saved values. This is a specific upgrade, not a general-purpose
+migration framework.
 
 ## Verify task operations and persistence
 
@@ -72,7 +74,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Tests failed: do not hand this version to the 
 Start-Process .\reports\htmlcov\index.html
 ```
 
-The current suite collects 53 cases: 31 unit cases and 22 PostgreSQL integration
+The current suite collects 117 cases: 61 unit cases and 56 PostgreSQL integration
 cases. Parameterised cases count individually. All must pass; application statement
 coverage must be at least 80%. The script preserves the test exit status even after
 cleaning up the test containers. Keep these outputs:
@@ -104,20 +106,46 @@ Jinja receives the variable `commit_sha`.
 | Method | Path | Input | Success result |
 | --- | --- | --- | --- |
 | GET | `/api/tasks` | None | 200; JSON array of task objects |
-| POST | `/api/tasks` | JSON title, optional description and status | 201; created task; Location header |
+| POST | `/api/tasks` | JSON title, optional description, status, priority and dueDate | 201; created task; Location header |
 | GET | `/api/tasks/<id>` | None | 200; one task |
 | PATCH | `/api/tasks/<id>` | JSON containing only status | 200; updated task |
+| PUT | `/api/tasks/<id>` | JSON title, description, status; optional priority and dueDate | 200; updated task |
+| PUT | `/api/tasks/` | Same fields plus a positive integer id | 200; updated task |
 | DELETE | `/api/tasks/<id>` | None | 204; empty response |
 | GET | `/health` | None | 200; application status and commit |
 | GET | `/ready` | None | 200 when PostgreSQL responds; 503 otherwise |
 | GET | `/version` | None | 200; commit identifier |
 
-Example task: `{"id":1,"title":"Review brief","description":"Check diagram","status":"To Do"}`.
+Example task: `{"id":1,"title":"Review brief","description":"Check diagram","status":"To Do","priority":"Medium","dueDate":null}`.
 Valid statuses are exactly `To Do`, `In Progress` and `Done`. Titles must contain
 1-200 characters after trimming. Descriptions must be strings of at most 2000
 characters. Invalid values return 400 with `{"error":"..."}`; missing IDs return
 404; a non-JSON request body returns 415. Task creation defaults to an empty
-description and status `To Do`. PATCH changes status only.
+description, status `To Do`, priority `Medium` and no due date. Priority must be
+exactly `Low`, `Medium` or `High`. `dueDate` must be a real calendar date in
+`YYYY-MM-DD` form, null or an empty string. API responses always use `dueDate`
+and return null when no date is set. Input also accepts `due_date` as an alias;
+do not send both date field names in one request. Past dates are allowed.
+
+PATCH still changes status only and preserves the other fields. PUT requires
+title, description and status. Optional priority/date values are preserved if
+omitted; explicit null or an empty string clears the date. A body `id` on the
+resource URL must match the URL. Unknown IDs return 404 rather than creating
+a task. The collection endpoint accepts both `/api/tasks` and `/api/tasks/`
+and requires a positive integer `id` in the JSON body.
+
+```javascript
+await fetch(`/api/tasks/${editingTaskId}`, {
+  method: "PUT",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    title, description, status, priority, dueDate: dueDate || null
+  })
+});
+```
+
+See `TASK-EDITING-UPDATE.md` for the database backup, update and verification
+commands. Do not delete the database volume to introduce the new columns.
 
 ## Pipeline handoff for Siddharth
 

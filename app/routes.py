@@ -7,6 +7,15 @@ from .db import get_db
 from .validation import validate_status, validate_task
 
 bp = Blueprint("tasks", __name__)
+TASK_COLUMNS = "id, title, description, status, priority, due_date"
+
+
+def task_json(row):
+    """Keep browser date values in ISO form, rather than Flask's HTTP-date format."""
+    result = dict(row)
+    due_date = result.pop("due_date")
+    result["dueDate"] = due_date.isoformat() if due_date is not None else None
+    return result
 
 
 @bp.get("/")
@@ -35,10 +44,8 @@ def version():
 
 @bp.get("/api/tasks")
 def list_tasks():
-    rows = (
-        get_db().execute("SELECT id, title, description, status FROM tasks ORDER BY id").fetchall()
-    )
-    return jsonify(rows)
+    rows = get_db().execute(f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY id").fetchall()
+    return jsonify([task_json(row) for row in rows])
 
 
 @bp.post("/api/tasks")
@@ -50,25 +57,69 @@ def create_task():
     row = (
         get_db()
         .execute(
-            "INSERT INTO tasks (title, description, status) VALUES (%s, %s, %s) "
-            "RETURNING id, title, description, status",
-            (values["title"], values["description"], values["status"]),
+            "INSERT INTO tasks (title, description, status, priority, due_date) "
+            f"VALUES (%s, %s, %s, %s, %s) RETURNING {TASK_COLUMNS}",
+            (
+                values["title"],
+                values["description"],
+                values["status"],
+                values["priority"],
+                values["due_date"],
+            ),
         )
         .fetchone()
     )
-    return jsonify(row), 201, {"Location": f"/api/tasks/{row['id']}"}
+    return jsonify(task_json(row)), 201, {"Location": f"/api/tasks/{row['id']}"}
 
 
 @bp.get("/api/tasks/<int:task_id>")
 def get_task(task_id):
+    row = get_db().execute(f"SELECT {TASK_COLUMNS} FROM tasks WHERE id = %s", (task_id,)).fetchone()
+    if row is None:
+        abort(404, description="Task not found")
+    return jsonify(task_json(row))
+
+
+@bp.put("/api/tasks", strict_slashes=False)
+@bp.put("/api/tasks/<int:task_id>")
+def replace_task(task_id=None):
+    payload = request.get_json()
+    if not isinstance(payload, dict):
+        abort(400, description="Request body must be a JSON object")
+    if task_id is None:
+        task_id = payload.get("id")
+        if type(task_id) is not int or task_id <= 0:
+            abort(400, description="PUT /api/tasks/ requires a positive integer id")
+    elif "id" in payload and (type(payload["id"]) is not int or payload["id"] != task_id):
+        abort(400, description="Body id must match the URL task id")
+    try:
+        values = validate_task(payload, require_all=True)
+    except ValueError as error:
+        abort(400, description=str(error))
+    # Omitted optional fields retain their stored values. Explicit null/empty
+    # dueDate clears the date. A single UPDATE avoids a read/update race.
     row = (
         get_db()
-        .execute("SELECT id, title, description, status FROM tasks WHERE id = %s", (task_id,))
+        .execute(
+            "UPDATE tasks SET title = %s, description = %s, status = %s, "
+            "priority = COALESCE(%s, priority), "
+            "due_date = CASE WHEN %s THEN %s ELSE due_date END "
+            f"WHERE id = %s RETURNING {TASK_COLUMNS}",
+            (
+                values["title"],
+                values["description"],
+                values["status"],
+                values["priority"] if "priority" in payload else None,
+                "dueDate" in payload or "due_date" in payload,
+                values["due_date"],
+                task_id,
+            ),
+        )
         .fetchone()
     )
     if row is None:
         abort(404, description="Task not found")
-    return jsonify(row)
+    return jsonify(task_json(row))
 
 
 @bp.patch("/api/tasks/<int:task_id>")
@@ -83,14 +134,14 @@ def update_task_status(task_id):
     row = (
         get_db()
         .execute(
-            "UPDATE tasks SET status = %s WHERE id = %s RETURNING id, title, description, status",
+            f"UPDATE tasks SET status = %s WHERE id = %s RETURNING {TASK_COLUMNS}",
             (status, task_id),
         )
         .fetchone()
     )
     if row is None:
         abort(404, description="Task not found")
-    return jsonify(row)
+    return jsonify(task_json(row))
 
 
 @bp.delete("/api/tasks/<int:task_id>")
