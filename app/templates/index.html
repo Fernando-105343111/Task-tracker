@@ -4,8 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Task Tracker</title>
-    <link rel="stylesheet" href="../static/css/style.css">
-    <script src="../static/js/script.js" defer></script>
+    <link rel="stylesheet"
+      href="{{ url_for('static', filename='css/style.css') }}">
+
+<script src="{{ url_for('static', filename='js/script.js') }}"
+        defer></script>
 </head>
 <body>
     <main class="container">
@@ -13,6 +16,10 @@
             <h1>Task Tracker</h1>
             <p>Organise and manage your daily tasks.</p>
         </header>
+
+        <p class="version-info">
+    Version: {{ commit_sha | default('development', true) }}
+</p>
 
         <section class="dashboard">
             <div class="stat-card">

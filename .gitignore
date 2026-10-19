@@ -218,3 +218,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local configuration and generated project evidence
+.env.*
+!.env.example
+reports/
+evidence-local/
