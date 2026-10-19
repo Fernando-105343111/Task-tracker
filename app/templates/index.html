@@ -52,15 +52,20 @@
                     <option value="Done">Done</option>
                 </select>
 
+                <p class="field-note">
+                Priority and due date will be available after
+                backend integration is extended.
+                </p>
+
                 <label for="task-priority">Priority</label>
-                <select id="task-priority">
+                <select id="task-priority" disabled>
                     <option value="Low">Low</option>
                     <option value="Medium">Medium</option>
                     <option value="High">High</option>
                 </select>
 
                 <label for="task-due-date">Due Date</label>
-                <input id="task-due-date" type="date">
+                <input id="task-due-date" type="date" disabled>
 
                 <button type="submit">Create Task</button>
             </form>

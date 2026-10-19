@@ -162,6 +162,19 @@ button:disabled {
     background: #b91c1c;
 }
 
+.edit-btn {
+    background-color: #f59e0b;
+    color: #ffffff;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.edit-btn:hover {
+    background-color: #d97706;
+}
+
 .status-badge {
     display: inline-block;
     padding: 5px 10px;
