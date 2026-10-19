@@ -157,6 +157,13 @@ form.addEventListener("submit", async event => {
     event.preventDefault();
     if (loading) return;
 
+    if (editingTaskId !== null) {
+    showMessage(
+        "Editing is not available yet. Waiting for backend API support."
+    );
+    return;
+    }
+
     const title =
         document.getElementById("task-title").value.trim();
 
