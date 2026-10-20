@@ -1,0 +1,20 @@
+{
+  "name": "task-tracker",
+  "version": "1.0.0",
+  "description": "This branch supplies the backend, PostgreSQL schema, Docker Compose setup,\r unit tests and integration tests for SWE4-10, SWE4-12 and SWE4-13. It does not\r configure GitHub Actions, public server access, monitoring or Playwright.\r The home page is an integration placeholder; Isuri will build the task interface\r in `app/templates/index.html` and can put browser assets in `app/static/`.",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+  "test": "playwright test",
+  "test:e2e": "playwright test",
+  "test:e2e:ci": "playwright test --reporter=line"
+},
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
+  }
+}

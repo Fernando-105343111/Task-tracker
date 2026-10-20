@@ -224,3 +224,16 @@ __marimo__/
 !.env.example
 reports/
 evidence-local/
+
+
+# Node.js dependencies
+node_modules/
+
+# Playwright generated files
+playwright-report/
+test-results/
+playwright/.cache/
+
+# Local environment variables
+.env
+.env.local
