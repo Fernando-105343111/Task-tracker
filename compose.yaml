@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tasktracker}
+      POSTGRES_USER: ${POSTGRES_USER:-tasktracker}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Create .env with POSTGRES_PASSWORD first}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  web:
+    image: ${APP_IMAGE:-task-tracker:local}
+    build:
+      context: .
+      target: runtime
+      args:
+        COMMIT_SHA: ${COMMIT_SHA:-development}
+    environment:
+      DB_HOST: db
+      DB_NAME: ${POSTGRES_DB:-tasktracker}
+      DB_USER: ${POSTGRES_USER:-tasktracker}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Create .env with POSTGRES_PASSWORD first}
+    ports:
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-8080}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  postgres_data:
