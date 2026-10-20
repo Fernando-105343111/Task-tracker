@@ -21,6 +21,8 @@ def test_task_defaults_and_title_whitespace():
         "title": "Review brief",
         "description": "",
         "status": "To Do",
+        "priority": "Medium",
+        "due_date": None,
     }
 
 
