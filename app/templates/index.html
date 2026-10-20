@@ -1,16 +1,83 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Team Task Tracker</title>
-  </head>
-  <body>
-    <main>
-      <h1>Team Task Tracker</h1>
-      <p>The task API is running. The task-management interface will be added here.</p>
-      <p><a href="/api/tasks">View task records as JSON</a></p>
-      <p>Version: <code id="commit-id">{{ commit_sha }}</code></p>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Tracker</title>
+    <link rel="stylesheet"
+      href="{{ url_for('static', filename='css/style.css') }}">
+
+<script src="{{ url_for('static', filename='js/script.js') }}"
+        defer></script>
+</head>
+<body>
+    <main class="container">
+        <header>
+            <h1>Task Tracker</h1>
+            <p>Organise and manage your daily tasks.</p>
+        </header>
+
+        <p class="version-info">
+    Version: {{ commit_sha | default('development', true) }}
+</p>
+
+        <section class="dashboard">
+            <div class="stat-card">
+                <h2 id="total-tasks">0</h2>
+                <p>Total Tasks</p>
+            </div>
+            <div class="stat-card">
+                <h2 id="in-progress-tasks">0</h2>
+                <p>In Progress</p>
+            </div>
+            <div class="stat-card">
+                <h2 id="completed-tasks">0</h2>
+                <p>Completed</p>
+            </div>
+        </section>
+
+        <section class="task-form-section">
+            <h2 id="form-heading">Create New Task</h2>
+            <form id="task-form">
+                <label for="task-title">Task Title</label>
+                <input id="task-title" type="text" required>
+
+                <label for="task-description">Description</label>
+                <textarea id="task-description"></textarea>
+
+                <label for="task-status">Status</label>
+                <select id="task-status">
+                    <option value="To Do">To Do</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Done">Done</option>
+                </select>
+
+            
+
+                <label for="task-priority">Priority</label>
+                <select id="task-priority">
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                </select>
+
+                <label for="task-due-date">Due Date</label>
+                <input id="task-due-date" type="date">
+
+                <button type="submit">Create Task</button>
+                <button type="button" id="cancel-edit" hidden>
+                    Cancel Editing
+                </button>
+            </form>
+        </section>
+
+        <section class="task-list-section">
+            <h2>My Tasks</h2>
+            <p id="task-message" role="status" aria-live="polite"></p>
+            <div id="task-list">
+                <p>No tasks available.</p>
+            </div>
+        </section>
     </main>
-  </body>
+</body>
 </html>
