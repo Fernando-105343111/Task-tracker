@@ -37,7 +37,7 @@
         </section>
 
         <section class="task-form-section">
-            <h2>Create New Task</h2>
+            <h2 id="form-heading">Create New Task</h2>
             <form id="task-form">
                 <label for="task-title">Task Title</label>
                 <input id="task-title" type="text" required>
@@ -52,22 +52,22 @@
                     <option value="Done">Done</option>
                 </select>
 
-                <p class="field-note">
-                Priority and due date will be available after
-                backend integration is extended.
-                </p>
+            
 
                 <label for="task-priority">Priority</label>
-                <select id="task-priority" disabled>
+                <select id="task-priority">
                     <option value="Low">Low</option>
                     <option value="Medium">Medium</option>
                     <option value="High">High</option>
                 </select>
 
                 <label for="task-due-date">Due Date</label>
-                <input id="task-due-date" type="date" disabled>
+                <input id="task-due-date" type="date">
 
                 <button type="submit">Create Task</button>
+                <button type="button" id="cancel-edit" hidden>
+                    Cancel Editing
+                </button>
             </form>
         </section>
 
