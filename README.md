@@ -2,7 +2,8 @@
 
 This branch supplies the backend, PostgreSQL schema, Docker Compose setup,
 unit tests and integration tests for SWE4-10, SWE4-12 and SWE4-13. It does not
-configure GitHub Actions, public server access, monitoring or Playwright.
+configure public server access, monitoring or Playwright. GitHub Actions CI and
+image publishing are described below.
 The home page is an integration placeholder; Isuri will build the task interface
 in `app/templates/index.html` and can put browser assets in `app/static/`.
 
@@ -172,6 +173,28 @@ digest to production. Run one release at a time, or set unique `TASK_TEST_PROJEC
 values and use separate checkout directories so report paths cannot overlap.
 The workflow must propagate the test command's exit code and collect the report
 paths above. These files do not themselves implement the workflow gate.
+
+## CI and GHCR image publishing
+
+GitHub Actions runs on pull requests targeting `main` and pushes to `main`.
+It checks out the exact workflow SHA (the merge revision for pull requests) and
+runs `sh scripts/test.sh`: the existing Docker `test` target executes all pytest
+unit and isolated PostgreSQL integration tests, enforcing at least 80% application
+coverage. JUnit, XML/HTML coverage and test logs are retained for 14 days, including
+on failure when available. Tests never use the application/production database.
+
+Only passing tests allow the `runtime` target to build with
+`--build-arg COMMIT_SHA="$GITHUB_SHA"`. CI verifies the image's commit environment
+value and revision label. The image name is `ghcr.io/<lowercase-owner>/<lowercase-repo>:<full-GITHUB_SHA>`;
+for this repository, `ghcr.io/fernando-105343111/task-tracker:<full-GITHUB_SHA>`.
+Pull requests only test and build; they cannot publish. On successful pushes to
+`main`, a separate job with `packages: write` uses `GITHUB_TOKEN` to publish the
+saved image from the build job without rebuilding. Test or build failure blocks
+publication. No personal token or production credentials are required.
+
+SHA-tagged images and their registry digests are intended for later promotion to
+staging/production using the same image. Production deployment is **not implemented
+by this branch**.
 
 ## Deployment handoff for Fernando
 
