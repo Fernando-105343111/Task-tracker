@@ -174,8 +174,7 @@ jobs:
               set -e
               cd /opt/task-tracker-staging
 
-              APP_IMAGE='$APP_IMAGE' COMMIT_SHA='$GITHUB_SHA' \
-                docker compose -f compose.yaml -f compose.staging.yaml pull web
+              docker pull '$APP_IMAGE'
 
               APP_IMAGE='$APP_IMAGE' COMMIT_SHA='$GITHUB_SHA' \
                 docker compose -f compose.yaml -f compose.staging.yaml \
