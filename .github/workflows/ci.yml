@@ -116,3 +116,134 @@ jobs:
       - name: Log out of GHCR
         if: always()
         run: docker logout ghcr.io
+        
+  staging:
+    name: Deploy and test staging
+    needs: [runtime, publish]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    permissions:
+      contents: read
+      packages: read
+
+    outputs:
+      approved_image: ${{ steps.approve.outputs.image }}
+
+    env:
+      APP_IMAGE: ${{ needs.runtime.outputs.app_image }}
+      STAGING_HOST: ${{ secrets.STAGING_HOST }}
+      STAGING_USER: ${{ secrets.STAGING_USER }}
+      STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+
+    steps:
+      - name: Check out the tested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Configure staging SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$STAGING_SSH_KEY" > ~/.ssh/staging_key
+          chmod 600 ~/.ssh/staging_key
+          ssh-keyscan -H "$STAGING_HOST" >> ~/.ssh/known_hosts
+
+      - name: Copy Compose configuration to staging
+        run: |
+          scp -i ~/.ssh/staging_key -o IdentitiesOnly=yes \
+            compose.yaml \
+            "$STAGING_USER@$STAGING_HOST:/opt/task-tracker-staging/compose.yaml"
+
+      - name: Authenticate staging to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GHCR_TOKEN" | \
+          ssh -i ~/.ssh/staging_key -o IdentitiesOnly=yes \
+            "$STAGING_USER@$STAGING_HOST" \
+            "docker login ghcr.io --username '$GITHUB_ACTOR' --password-stdin"
+
+      - name: Deploy exact image to staging
+        run: |
+          ssh -i ~/.ssh/staging_key -o IdentitiesOnly=yes \
+            "$STAGING_USER@$STAGING_HOST" "
+              set -e
+              cd /opt/task-tracker-staging
+
+              APP_IMAGE='$APP_IMAGE' COMMIT_SHA='$GITHUB_SHA' \
+                docker compose -f compose.yaml -f compose.staging.yaml pull web
+
+              APP_IMAGE='$APP_IMAGE' COMMIT_SHA='$GITHUB_SHA' \
+                docker compose -f compose.yaml -f compose.staging.yaml \
+                up -d --no-build --remove-orphans
+
+              APP_IMAGE='$APP_IMAGE' COMMIT_SHA='$GITHUB_SHA' \
+                docker compose -f compose.yaml -f compose.staging.yaml ps
+            "
+
+      - name: Create SSH tunnel to staging
+        run: |
+          ssh -i ~/.ssh/staging_key \
+            -o IdentitiesOnly=yes \
+            -o ExitOnForwardFailure=yes \
+            -N -L 18080:127.0.0.1:8080 \
+            "$STAGING_USER@$STAGING_HOST" &
+
+          echo $! > "$RUNNER_TEMP/staging-tunnel.pid"
+
+      - name: Wait for staging application
+        run: |
+          for attempt in $(seq 1 24); do
+            if curl -fsS http://127.0.0.1:18080/ > /dev/null; then
+              echo "Staging application is ready"
+              exit 0
+            fi
+
+            sleep 5
+          done
+
+          echo "Staging application did not become ready"
+          exit 1
+
+      - name: Install Playwright
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run Playwright acceptance tests against staging
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:18080
+        run: npx playwright test
+
+      - name: Retain Playwright evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: staging-playwright-${{ github.sha }}
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Approve tested image for production
+        id: approve
+        run: echo "image=$APP_IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Stop staging SSH tunnel
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/staging-tunnel.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/staging-tunnel.pid")" 2>/dev/null || true
+          fi
+
+      - name: Log staging out of GHCR
+        if: always()
+        run: |
+          ssh -i ~/.ssh/staging_key -o IdentitiesOnly=yes \
+            "$STAGING_USER@$STAGING_HOST" \
+            "docker logout ghcr.io || true"
