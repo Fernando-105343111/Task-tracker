@@ -9,7 +9,7 @@
   "scripts": {
   "test": "playwright test",
   "test:e2e": "playwright test",
-  "test:e2e:ci": "playwright test --reporter=line"
+  "test:e2e:ci": "playwright test --reporter=line,html"
 },
   "keywords": [],
   "author": "",
