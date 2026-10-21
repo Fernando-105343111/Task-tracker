@@ -2,8 +2,8 @@
 
 This branch supplies the backend, PostgreSQL schema, Docker Compose setup,
 unit tests and integration tests for SWE4-10, SWE4-12 and SWE4-13. It does not
-configure public server access, monitoring or Playwright. GitHub Actions CI and
-image publishing are described below.
+configure public server access or monitoring. GitHub Actions CI, image publishing
+and the staging Playwright gate are described below.
 The home page is an integration placeholder; Isuri will build the task interface
 in `app/templates/index.html` and can put browser assets in `app/static/`.
 
@@ -195,6 +195,32 @@ publication. No personal token or production credentials are required.
 SHA-tagged images and their registry digests are intended for later promotion to
 staging/production using the same image. Production deployment is **not implemented
 by this branch**.
+
+## Staging deployment and acceptance gate (SWE4-20)
+
+Trusted pushes to `main` follow this flow:
+tests/coverage → runtime image → GHCR SHA image → explicit staging `docker pull`
+→ health/readiness and commit checks → SSH tunnel → Playwright E2E
+→ approved image eligible for later production promotion. PRs cannot publish or
+deploy. Staging jobs are serialized so CI deployments cannot overlap.
+
+The existing staging job uses `STAGING_HOST`, `STAGING_USER` and `STAGING_SSH_KEY`
+with known-host verification on SSH port 22. In `/opt/task-tracker-staging`, it
+pulls the exact `APP_IMAGE` before Compose starts it with `--no-build`, even when
+the server's `compose.staging.yaml` sets `pull_policy: never`. It preserves the
+PostgreSQL volume and verifies the running image and `/version` commit SHA.
+
+Staging stays bound to `127.0.0.1:8080`; neither it nor PostgreSQL is exposed
+publicly. After `/health` and `/ready` return HTTP 200 with bounded retries,
+Actions connects through `127.0.0.1:18080` over an SSH tunnel to staging localhost.
+It runs `npm ci`, installs Chromium and executes `npm run test:e2e:ci` with
+`PLAYWRIGHT_BASE_URL=http://127.0.0.1:18080`.
+
+Any deployment, health, readiness, version or E2E failure prevents the
+`approved_image` job output. HTML reports and `test-results/` are retained for
+14 days when available, including on failure. Cleanup stops the tunnel, attempts
+GHCR logout and removes the runner's temporary SSH key, leaving staging running.
+Production deployment is not implemented.
 
 ## Deployment handoff for Fernando
 
