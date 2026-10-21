@@ -419,7 +419,7 @@ jobs:
               test \"\$running_image\" = '$APP_IMAGE'
 
               revision=\$(docker image inspect '$APP_IMAGE' \
-                --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')
+                --format '{{ index .Config.Labels \"org.opencontainers.image.revision\" }}')
 
               echo \"Embedded revision: \$revision\"
               test \"\$revision\" = '$GITHUB_SHA'
