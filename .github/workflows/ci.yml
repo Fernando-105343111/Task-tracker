@@ -314,3 +314,120 @@ jobs:
           fi
           echo "$result"
           echo "$result" >> "$GITHUB_STEP_SUMMARY"
+
+  production:
+    name: Deploy and verify production
+    needs: staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      contents: read
+      packages: read
+
+    env:
+      APP_IMAGE: ${{ needs.staging.outputs.approved_image }}
+      PROD_HOST: ${{ secrets.PROD_HOST }}
+      PROD_USER: ${{ secrets.PROD_USER }}
+      PROD_SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+
+    steps:
+      - name: Check out the approved revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Configure production SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$PROD_SSH_KEY" > ~/.ssh/prod_key
+          chmod 600 ~/.ssh/prod_key
+          ssh-keyscan -H "$PROD_HOST" >> ~/.ssh/known_hosts
+
+      - name: Copy Compose configuration to production
+        run: |
+          scp -i ~/.ssh/prod_key -o IdentitiesOnly=yes \
+            compose.yaml \
+            "$PROD_USER@$PROD_HOST:/opt/task-tracker/compose.yaml"
+
+      - name: Authenticate production to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GHCR_TOKEN" | \
+          ssh -i ~/.ssh/prod_key -o IdentitiesOnly=yes \
+            "$PROD_USER@$PROD_HOST" \
+            "docker login ghcr.io --username '$GITHUB_ACTOR' --password-stdin"
+
+      - name: Deploy approved image to production
+        run: |
+          ssh -i ~/.ssh/prod_key -o IdentitiesOnly=yes \
+            "$PROD_USER@$PROD_HOST" "
+              set -e
+              cd /opt/task-tracker
+
+              docker pull '$APP_IMAGE'
+
+              APP_IMAGE='$APP_IMAGE' COMMIT_SHA='$GITHUB_SHA' \
+                docker compose up -d --no-build --remove-orphans
+
+              APP_IMAGE='$APP_IMAGE' COMMIT_SHA='$GITHUB_SHA' \
+                docker compose ps
+            "
+
+      - name: Verify production application and database
+        run: |
+          ssh -i ~/.ssh/prod_key -o IdentitiesOnly=yes \
+            "$PROD_USER@$PROD_HOST" "
+              set -e
+
+              for attempt in \$(seq 1 24); do
+                if curl -fsS http://127.0.0.1:8080/ > /dev/null && \
+                   curl -fsS http://127.0.0.1:8080/api/tasks > /dev/null; then
+                  echo 'Production application and database are responding'
+                  exit 0
+                fi
+
+                sleep 5
+              done
+
+              echo 'Production verification failed'
+              exit 1
+            "
+
+      - name: Verify exact approved image is running
+        run: |
+          ssh -i ~/.ssh/prod_key -o IdentitiesOnly=yes \
+            "$PROD_USER@$PROD_HOST" "
+              set -e
+              cd /opt/task-tracker
+
+              container_id=\$(APP_IMAGE='$APP_IMAGE' COMMIT_SHA='$GITHUB_SHA' \
+                docker compose ps -q web)
+
+              test -n \"\$container_id\"
+
+              running_image=\$(docker inspect \"\$container_id\" \
+                --format '{{.Config.Image}}')
+
+              echo \"Running image: \$running_image\"
+              echo \"Approved image: $APP_IMAGE\"
+
+              test \"\$running_image\" = '$APP_IMAGE'
+
+              revision=\$(docker image inspect '$APP_IMAGE' \
+                --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')
+
+              echo \"Embedded revision: \$revision\"
+              test \"\$revision\" = '$GITHUB_SHA'
+            "
+
+      - name: Log production out of GHCR
+        if: always()
+        run: |
+          ssh -i ~/.ssh/prod_key -o IdentitiesOnly=yes \
+            "$PROD_USER@$PROD_HOST" \
+            "docker logout ghcr.io || true"
